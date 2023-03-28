@@ -1,0 +1,8 @@
+CMakeFiles
+*.cmake
+build
+CMakeCache.txt
+Makefile
+*.pdf
+settings.json
+tasks.json
