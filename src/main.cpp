@@ -135,15 +135,14 @@ void calculateResultMatrixParallel(int **matrixA, const int aRows, const int aCo
 
   const auto processor_count = omp_get_num_procs();
   const int thread_count =
-      determineThreadCount(processor_count, aRows, aCols, bCols);
+      determineThreadCount(processor_count -1, aRows, aCols, bCols);
   const std::vector<std::pair<int, int>> rowStartRowEnd =
       determineRowDistribution(thread_count, aRows);
 
-  omp_set_num_threads(thread_count + 1); // +1 is necessary to get desired amount
-
+  omp_set_num_threads(thread_count); 
   std::cout << "\ncores: " << processor_count << " threads used: " << thread_count << "\n";
 
-#pragma omp parallel
+#pragma omp parallel 
   {
     const int id = omp_get_thread_num();
     if (id)
