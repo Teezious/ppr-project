@@ -141,9 +141,9 @@ void calculateResultMatrixParallel(int **matrixA, const int aRows, const int aCo
 
   omp_set_num_threads(thread_count + 1); // +1 is necessary to get desired amount
 
-  std::cout << "cores: " << processor_count << " threads used: " << thread_count << "\n";
+  std::cout << "\ncores: " << processor_count << " threads used: " << thread_count << "\n";
 
-#pragma omp parallel 
+#pragma omp parallel
   {
     const int id = omp_get_thread_num();
     if (id)
@@ -158,14 +158,13 @@ void calculateResultMatrixParallel(int **matrixA, const int aRows, const int aCo
           int result = 0;
           for (int r2 = 0; r2 < aCols; ++r2)
           {
-            result += matrixA[currentRow][r2] * matrixBCopy[r2][c2];
+            result += matrixA[currentRow][r2] * matrixB[r2][c2];
           }
           resultMatrix[currentRow][c2] = result;
         }
       }
     }
   }
-
   // std::cout << "Matrix AB: \n";
   // printMatrix(aRows, bCols, resultMatrix);
 
@@ -199,6 +198,11 @@ int main(void)
   int **matrixA = getMatrix(aRows, aCols);
   int **matrixB = getMatrix(bCols, bRows);
 
+  // std::cout << "Matrix A: \n";
+  // printMatrix(aRows, aCols, matrixA);
+  // std::cout << "Matrix B: \n";
+  // printMatrix(bCols, bRows, matrixB);
+
   std::chrono::steady_clock::time_point beginSequential = std::chrono::steady_clock::now();
   calculateResultMatrix(matrixA, aRows, aCols, matrixB, bCols);
   std::chrono::steady_clock::time_point endSequential = std::chrono::steady_clock::now();
@@ -211,10 +215,6 @@ int main(void)
   auto parallelTime = std::chrono::duration_cast<std::chrono::microseconds>(endParallel - beginParallel).count();
   std::cout << "parallel version: " << parallelTime << "[µs]" << std::endl;
 
-  // std::cout << "Matrix A: \n";
-  // printMatrix(aRows, aCols, matrixA);
-  // std::cout << "Matrix B: \n";
-  // printMatrix(bCols, bRows, matrixB);
 
   for (int h = 0; h < aRows; h++)
   {
