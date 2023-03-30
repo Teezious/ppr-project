@@ -6,3 +6,4 @@ Makefile
 *.pdf
 settings.json
 tasks.json
+main

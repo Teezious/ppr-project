@@ -45,8 +45,8 @@ int **getMatrix(int rows, int columns, bool random = true)
 
 int determineThreadCount(const int processorCount, const int matrixARows, const int matrixACols, const int matrixBCols)
 {
-  const int computationsPerColumn = matrixACols * matrixACols; // multiplication and summation 
-  const int totalComputations = matrixARows * computationsPerColumn * matrixBCols;
+  const unsigned long long int computationsPerColumn = matrixACols * matrixACols; // multiplication and summation 
+  const unsigned long long int totalComputations = matrixARows * computationsPerColumn * matrixBCols;
   const int threads = std::max(1,static_cast<int>(totalComputations / MINIMUMCOMPUTATIONSPERTHREAD));
   return (threads <= processorCount) ? threads : processorCount;
 }
