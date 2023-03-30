@@ -42,11 +42,11 @@ int **getMatrix(int rows, int columns, bool random = true)
   return array2D;
 }
 
-int determineThreadCount(const int processorCount, const int resultMatrixRows)
+int determineThreadCount(const int processorCount, const int matrixARows)
 {
-  if (resultMatrixRows <= processorCount)
+  if (matrixARows <= processorCount)
   {
-    return resultMatrixRows;
+    return matrixARows;
   }
   return processorCount;
 }
@@ -121,7 +121,7 @@ void calculateResultMatrix(int **matrixA, const int aRows, const int aCols, int 
   // std::cout << "Matrix AB: \n";
   // printMatrix(aRows, bCols, resultMatrix);
 
-  for (int h = 0; h < aCols; h++)
+  for (int h = 0; h < aRows; h++)
   {
     delete[] resultMatrix[h];
   }
@@ -143,10 +143,7 @@ void calculateResultMatrixParallel(int **matrixA, const int aRows, const int aCo
 
   std::cout << "cores: " << processor_count << " threads used: " << thread_count << "\n";
 
-  int matrixBCopy[aCols][bCols];
-  //std::copy(&matrixB[0][0], &matrixB[0][0]+aCols*bCols,&matrixBCopy[0][0]);
-
-#pragma omp parallel
+#pragma omp parallel 
   {
     const int id = omp_get_thread_num();
     if (id)
@@ -161,7 +158,7 @@ void calculateResultMatrixParallel(int **matrixA, const int aRows, const int aCo
           int result = 0;
           for (int r2 = 0; r2 < aCols; ++r2)
           {
-            result += matrixA[currentRow][r2] * matrixB[r2][c2];
+            result += matrixA[currentRow][r2] * matrixBCopy[r2][c2];
           }
           resultMatrix[currentRow][c2] = result;
         }
@@ -172,7 +169,7 @@ void calculateResultMatrixParallel(int **matrixA, const int aRows, const int aCo
   // std::cout << "Matrix AB: \n";
   // printMatrix(aRows, bCols, resultMatrix);
 
-  for (int h = 0; h < aCols; h++)
+  for (int h = 0; h < aRows; h++)
   {
     delete[] resultMatrix[h];
   }
@@ -186,14 +183,14 @@ int main(void)
   int bRows = 0;
   int bCols = 0;
 
-  std::cout << "Enter the number of rows for the first matrix: " << std::endl;
+  std::cout << "Enter the number of rows for Matrix A " << std::endl;
   std::cin >> aRows;
 
-  std::cout << "Enter the number of columns for the first matrix:  "
+  std::cout << "Enter the number of columns Matrix A:  "
             << std::endl;
   std::cin >> aCols;
 
-  std::cout << "Enter the number of columns for the second matrix: "
+  std::cout << "Enter the number of columns Matrix B: "
             << std::endl;
   std::cin >> bRows;
 
@@ -202,17 +199,17 @@ int main(void)
   int **matrixA = getMatrix(aRows, aCols);
   int **matrixB = getMatrix(bCols, bRows);
 
-  std::chrono::steady_clock::time_point beginLinear = std::chrono::steady_clock::now();
+  std::chrono::steady_clock::time_point beginSequential = std::chrono::steady_clock::now();
   calculateResultMatrix(matrixA, aRows, aCols, matrixB, bCols);
-  std::chrono::steady_clock::time_point endLinear = std::chrono::steady_clock::now();
-  std::cout << "linear version: << " << std::chrono::duration_cast<std::chrono::microseconds>(endLinear - beginLinear).count() << "[µs]" << std::endl;
+  std::chrono::steady_clock::time_point endSequential = std::chrono::steady_clock::now();
+  auto linearTime = std::chrono::duration_cast<std::chrono::microseconds>(endSequential - beginSequential).count();
+  std::cout << "sequential version: " << linearTime << "[µs]" << std::endl;
 
   std::chrono::steady_clock::time_point beginParallel = std::chrono::steady_clock::now();
   calculateResultMatrixParallel(matrixA, aRows, aCols, matrixB, bCols);
   std::chrono::steady_clock::time_point endParallel = std::chrono::steady_clock::now();
-  std::cout << "parallel version: " << std::chrono::duration_cast<std::chrono::microseconds>(endParallel - beginParallel).count() << "[µs]" << std::endl;
-
-  std::cout << "ratio: " << std::chrono::duration_cast<std::chrono::microseconds>(endLinear - beginLinear).count() / std::chrono::duration_cast<std::chrono::microseconds>(endParallel - beginParallel).count() << std::endl;
+  auto parallelTime = std::chrono::duration_cast<std::chrono::microseconds>(endParallel - beginParallel).count();
+  std::cout << "parallel version: " << parallelTime << "[µs]" << std::endl;
 
   // std::cout << "Matrix A: \n";
   // printMatrix(aRows, aCols, matrixA);
