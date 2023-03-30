@@ -14,6 +14,7 @@
 #include <vector>
 
 #define MAXDIGITS 5
+#define MINIMUMCOMPUTATIONSPERTHREAD 20000000
 
 int **getMatrix(int rows, int columns, bool random = true)
 {
@@ -42,13 +43,12 @@ int **getMatrix(int rows, int columns, bool random = true)
   return array2D;
 }
 
-int determineThreadCount(const int processorCount, const int matrixARows)
+int determineThreadCount(const int processorCount, const int matrixARows, const int matrixACols, const int matrixBCols)
 {
-  if (matrixARows <= processorCount)
-  {
-    return matrixARows;
-  }
-  return processorCount;
+  const int computationsPerColumn = matrixACols * matrixACols; // multiplication and summation 
+  const int totalComputations = matrixARows * computationsPerColumn * matrixBCols;
+  const int threads = std::max(1,static_cast<int>(totalComputations / MINIMUMCOMPUTATIONSPERTHREAD));
+  return (threads <= processorCount) ? threads : processorCount;
 }
 
 int getMaxAmountOfDigits(const int rows, const int columns, int **arr)
@@ -135,7 +135,7 @@ void calculateResultMatrixParallel(int **matrixA, const int aRows, const int aCo
 
   const auto processor_count = omp_get_num_procs();
   const int thread_count =
-      determineThreadCount(processor_count, aRows);
+      determineThreadCount(processor_count, aRows, aCols, bCols);
   const std::vector<std::pair<int, int>> rowStartRowEnd =
       determineRowDistribution(thread_count, aRows);
 
