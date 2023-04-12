@@ -13,9 +13,10 @@
 #include <time.h>
 #include <vector>
 
-#define MAXDIGITS 8
-#define MINIMUMCOMPUTATIONSPERTHREAD 20000000
-#define LOOPRUNS 10
+#define MAXDIGITS 8 // define the max amount of digits a number inside Matrix A or B can have
+#define MINIMUMCOMPUTATIONSPERTHREAD 20000000 // estimate to increase the bad performance of small matrices by not using the max amount of threads
+#define LOOPRUNS 10 // defines the amount of benchmark runs
+
 
 int **getMatrix(int rows, int columns, bool random = true)
 {
@@ -44,6 +45,7 @@ int **getMatrix(int rows, int columns, bool random = true)
   return array2D;
 }
 
+// determines the amount of threads to be used
 int determineThreadCount(const int processorCount, const int matrixARows, const int matrixACols, const int matrixBCols)
 {
   const unsigned long long int computationsPerColumn = matrixACols * matrixACols; // multiplication and summation
@@ -52,6 +54,8 @@ int determineThreadCount(const int processorCount, const int matrixARows, const 
   return (threads <= processorCount) ? threads : processorCount;
 }
 
+// splits the rows of Matrix A in equal sized parts
+// each pair represents starting- and end row
 std::vector<std::pair<int, int>> determineRowDistribution(const int threads,
                                                           const int tasks)
 {
@@ -72,6 +76,7 @@ template<typename T> auto calculateResultMatrix(int **matrixA, const int aRows, 
   std::chrono::steady_clock::time_point beginSequential = std::chrono::steady_clock::now();
   int **resultMatrix = getMatrix(aRows, bCols, false);
 
+  // Matrix multiplication 
   for (int row = 0; row < aRows; ++row)
   {
     for (int c2 = 0; c2 < bCols; ++c2)
@@ -117,6 +122,7 @@ template<typename T> auto calculateResultMatrixParallel(int **matrixA, const int
       const int startRow = rowStartRowEnd.at(id - 1).first; // id starts with 1
       const int endRow = rowStartRowEnd.at(id - 1).second;
 
+      // Matrix Multiplication for the section of start row to end row
       for (int currentRow = startRow; currentRow <= endRow; ++currentRow)
       {
         for (int c2 = 0; c2 < bCols; ++c2)
@@ -151,7 +157,7 @@ void benchmarkMatrix(const int aRows, const int aCols, const int bRows, const in
   std::chrono::milliseconds totalParallelTime = std::chrono::milliseconds(0);
   for (int i = 0; i < loopRuns; ++i)
   {
-    int **matrixA = getMatrix(aRows, aCols);
+    int **matrixA = getMatrix(aRows, aCols); // using a 1d array, vectors, or boost multi_arrays might be better here
     int **matrixB = getMatrix(bCols, bRows);
 
     auto linearTime = calculateResultMatrix<std::chrono::microseconds>(matrixA, aRows, aCols, matrixB, bCols);
@@ -189,6 +195,7 @@ int main(void)
   benchmarkMatrix(1000,1000,1000,LOOPRUNS);
 
   // calculation time gets rather long here 
+
   // benchmarkMatrix(10000,1000,1000,LOOPRUNS);
   // benchmarkMatrix(10000,10000,1000,LOOPRUNS);
   // benchmarkMatrix(10000,10000,10000,LOOPRUNS);
