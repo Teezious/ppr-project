@@ -13,8 +13,9 @@
 #include <time.h>
 #include <vector>
 
-#define MAXDIGITS 5
+#define MAXDIGITS 8
 #define MINIMUMCOMPUTATIONSPERTHREAD 20000000
+#define LOOPRUNS 10
 
 int **getMatrix(int rows, int columns, bool random = true)
 {
@@ -45,45 +46,10 @@ int **getMatrix(int rows, int columns, bool random = true)
 
 int determineThreadCount(const int processorCount, const int matrixARows, const int matrixACols, const int matrixBCols)
 {
-  const unsigned long long int computationsPerColumn = matrixACols * matrixACols; // multiplication and summation 
+  const unsigned long long int computationsPerColumn = matrixACols * matrixACols; // multiplication and summation
   const unsigned long long int totalComputations = matrixARows * computationsPerColumn * matrixBCols;
-  const int threads = std::max(1,static_cast<int>(totalComputations / MINIMUMCOMPUTATIONSPERTHREAD));
+  const int threads = std::max(1, static_cast<int>(totalComputations / MINIMUMCOMPUTATIONSPERTHREAD));
   return (threads <= processorCount) ? threads : processorCount;
-}
-
-int getMaxAmountOfDigits(const int rows, const int columns, int **arr)
-{
-  int max = 0;
-  for (int r = 0; r < rows; ++r)
-  {
-    for (int c = 0; c < columns; ++c)
-    {
-      int num = arr[r][c];
-      int digits = log10(num);
-      max = std::max(digits, max);
-    }
-  }
-  return max;
-}
-
-void printMatrix(const int rows, const int columns, int **arr)
-{
-  const int maxDigits = getMaxAmountOfDigits(rows, columns, arr);
-  for (int r = 0; r < rows; ++r)
-  {
-    for (int c = 0; c < columns; ++c)
-    {
-      int num = arr[r][c];
-      int digits = log10(num);
-      std::cout << num;
-      for (; digits <= maxDigits; ++digits)
-      {
-        std::cout << " ";
-      }
-    }
-    std::cout << "\n";
-  }
-  std::cout << "\n";
 }
 
 std::vector<std::pair<int, int>> determineRowDistribution(const int threads,
@@ -101,8 +67,9 @@ std::vector<std::pair<int, int>> determineRowDistribution(const int threads,
   return rowStartRowEnd;
 }
 
-void calculateResultMatrix(int **matrixA, const int aRows, const int aCols, int **matrixB, const int bCols)
+template<typename T> auto calculateResultMatrix(int **matrixA, const int aRows, const int aCols, int **matrixB, const int bCols)
 {
+  std::chrono::steady_clock::time_point beginSequential = std::chrono::steady_clock::now();
   int **resultMatrix = getMatrix(aRows, bCols, false);
 
   for (int row = 0; row < aRows; ++row)
@@ -118,31 +85,31 @@ void calculateResultMatrix(int **matrixA, const int aRows, const int aCols, int 
     }
   }
 
-  // std::cout << "Matrix AB: \n";
-  // printMatrix(aRows, bCols, resultMatrix);
-
   for (int h = 0; h < aRows; h++)
   {
     delete[] resultMatrix[h];
   }
   delete[] resultMatrix;
+  std::chrono::steady_clock::time_point endSequential = std::chrono::steady_clock::now();
+
+  return std::chrono::duration_cast<T>(endSequential - beginSequential);
 }
 
-void calculateResultMatrixParallel(int **matrixA, const int aRows, const int aCols, int **matrixB, const int bCols)
+template<typename T> auto calculateResultMatrixParallel(int **matrixA, const int aRows, const int aCols, int **matrixB, const int bCols)
 {
+  std::chrono::steady_clock::time_point beginParallel = std::chrono::steady_clock::now();
 
   int **resultMatrix = getMatrix(aRows, bCols, false);
 
   const auto processor_count = omp_get_num_procs();
   const int thread_count =
-      determineThreadCount(processor_count -1, aRows, aCols, bCols);
+      determineThreadCount(processor_count - 1, aRows, aCols, bCols);
   const std::vector<std::pair<int, int>> rowStartRowEnd =
       determineRowDistribution(thread_count, aRows);
 
-  omp_set_num_threads(thread_count); 
-  std::cout << "\ncores: " << processor_count << " threads used: " << thread_count << "\n";
+  omp_set_num_threads(thread_count);
 
-#pragma omp parallel 
+#pragma omp parallel
   {
     const int id = omp_get_thread_num();
     if (id)
@@ -164,67 +131,66 @@ void calculateResultMatrixParallel(int **matrixA, const int aRows, const int aCo
       }
     }
   }
-  // std::cout << "Matrix AB: \n";
-  // printMatrix(aRows, bCols, resultMatrix);
 
   for (int h = 0; h < aRows; h++)
   {
     delete[] resultMatrix[h];
   }
   delete[] resultMatrix;
+
+  std::chrono::steady_clock::time_point endParallel = std::chrono::steady_clock::now();
+
+  return std::chrono::duration_cast<T>(endParallel - beginParallel);
+}
+
+void benchmarkMatrix(const int aRows, const int aCols, const int bRows, const int loopRuns)
+{
+  const int bCols = aCols;
+
+  std::chrono::milliseconds totalLinearTime = std::chrono::milliseconds(0);
+  std::chrono::milliseconds totalParallelTime = std::chrono::milliseconds(0);
+  for (int i = 0; i < loopRuns; ++i)
+  {
+    int **matrixA = getMatrix(aRows, aCols);
+    int **matrixB = getMatrix(bCols, bRows);
+
+    auto linearTime = calculateResultMatrix<std::chrono::microseconds>(matrixA, aRows, aCols, matrixB, bCols);
+    totalLinearTime += std::chrono::duration_cast<std::chrono::milliseconds>(totalLinearTime + linearTime);
+    auto parallelTime = calculateResultMatrixParallel<std::chrono::microseconds>(matrixA, aRows, aCols, matrixB, bCols);
+    totalParallelTime += std::chrono::duration_cast<std::chrono::milliseconds>(totalParallelTime + parallelTime);
+    for (int h = 0; h < aRows; h++)
+    {
+      delete[] matrixA[h];
+    }
+    delete[] matrixA;
+    for (int h = 0; h < bCols; h++)
+    {
+      delete[] matrixB[h];
+    }
+    delete[] matrixB;
+  }
+
+  std::cout << "\n----------------------------------------------------------------------------\n";
+  std::cout << "Dimensions: " << aRows << " x " << aCols << " * " << bRows << " x " << bCols << std::endl;
+  std::cout << "Average Linear Time: " << totalLinearTime.count() / loopRuns << "ms\n";
+  std::cout << "Average Parallel Time: " << totalParallelTime.count() / loopRuns << "ms\n";
+  std::cout << "----------------------------------------------------------------------------";
+
 }
 
 int main(void)
 {
-  int aRows = 0;
-  int aCols = 0;
-  int bRows = 0;
-  int bCols = 0;
+  benchmarkMatrix(10,10,10,LOOPRUNS);
+  benchmarkMatrix(100,10,10,LOOPRUNS);
+  benchmarkMatrix(100,100,10,LOOPRUNS);
+  benchmarkMatrix(100,100,100,LOOPRUNS);
+  benchmarkMatrix(1000,100,100,LOOPRUNS);
+  benchmarkMatrix(1000,1000,100,LOOPRUNS);
+  benchmarkMatrix(1000,1000,1000,LOOPRUNS);
 
-  std::cout << "Enter the number of rows for Matrix A " << std::endl;
-  std::cin >> aRows;
-
-  std::cout << "Enter the number of columns Matrix A:  "
-            << std::endl;
-  std::cin >> aCols;
-
-  std::cout << "Enter the number of columns Matrix B: "
-            << std::endl;
-  std::cin >> bRows;
-
-  bCols = aCols;
-
-  int **matrixA = getMatrix(aRows, aCols);
-  int **matrixB = getMatrix(bCols, bRows);
-
-  // std::cout << "Matrix A: \n";
-  // printMatrix(aRows, aCols, matrixA);
-  // std::cout << "Matrix B: \n";
-  // printMatrix(bCols, bRows, matrixB);
-
-  std::chrono::steady_clock::time_point beginSequential = std::chrono::steady_clock::now();
-  calculateResultMatrix(matrixA, aRows, aCols, matrixB, bCols);
-  std::chrono::steady_clock::time_point endSequential = std::chrono::steady_clock::now();
-  auto linearTime = std::chrono::duration_cast<std::chrono::microseconds>(endSequential - beginSequential).count();
-  std::cout << "sequential version: " << linearTime << "[µs]" << std::endl;
-
-  std::chrono::steady_clock::time_point beginParallel = std::chrono::steady_clock::now();
-  calculateResultMatrixParallel(matrixA, aRows, aCols, matrixB, bCols);
-  std::chrono::steady_clock::time_point endParallel = std::chrono::steady_clock::now();
-  auto parallelTime = std::chrono::duration_cast<std::chrono::microseconds>(endParallel - beginParallel).count();
-  std::cout << "parallel version: " << parallelTime << "[µs]" << std::endl;
-
-
-  for (int h = 0; h < aRows; h++)
-  {
-    delete[] matrixA[h];
-  }
-  delete[] matrixA;
-  for (int h = 0; h < bCols; h++)
-  {
-    delete[] matrixB[h];
-  }
-  delete[] matrixB;
-
+  // calculation time gets rather long here 
+  // benchmarkMatrix(10000,1000,1000,LOOPRUNS);
+  // benchmarkMatrix(10000,10000,1000,LOOPRUNS);
+  // benchmarkMatrix(10000,10000,10000,LOOPRUNS);
   return 0;
 }
